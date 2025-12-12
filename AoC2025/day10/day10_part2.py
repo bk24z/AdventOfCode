@@ -1,10 +1,5 @@
 from itertools import combinations_with_replacement, chain
-
-
-def switch_light(light):
-    if light == '.':
-        return '#'
-    return '.'
+from pulp import *
 
 
 def main():
@@ -24,22 +19,27 @@ def main():
         f.close()
 
     for machine in machines:
-        current_joltages = []
         buttons, joltage_reqs = machine
-        print(max(list(chain(*buttons))))
-        num_button_presses = int(max(joltage_reqs) / max(list(chain(*buttons))))
-        while current_joltages != joltage_reqs:
-            num_button_presses += 1
-            print(num_button_presses)
-            for button_combo in combinations_with_replacement(buttons, num_button_presses):
-                current_joltages = [0] * len(joltage_reqs)
-                for button in button_combo:
-                    for light in button:
-                        current_joltages[light] += 1
-                if current_joltages == joltage_reqs:
-                    print(num_button_presses,button_combo,current_joltages)
-                    break
-        total_button_presses += num_button_presses
+        # Step 1: Creating the minimisation problem
+        model = pulp.LpProblem("Minimise_Button_Presses", LpMinimize)
+        # Step 2: Creating decision variables
+        # x[i] represents "how many times should we press button i?"
+        x = [pulp.LpVariable(f"x{i}", lowBound=0, cat='Integer') for i in range(len(buttons))]
+        # Step 3: Setting the objective function
+        # Minimising the total number of button presses
+        model += pulp.lpSum(x)
+        # Step 4: Adding constraints
+        # One per joltage counter
+        for counter_idx in range(len(joltage_reqs)):
+            # Building the left side of the equation: sum of all buttons that affect this counter
+            constraint = pulp.lpSum([x[button_idx] for button_idx in range(len(buttons))
+                                     if counter_idx in buttons[button_idx]])
+            # Adding the constraint: the sum must equal the target joltage
+            # This creates equations like: x[1] + x[3] + x[5] = 41
+            model += constraint == joltage_reqs[counter_idx]
+        model.solve()
+        button_presses = sum(pulp.value(var) for var in x)
+        total_button_presses += button_presses
 
     print(total_button_presses)
 
